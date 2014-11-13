@@ -10,9 +10,7 @@ STDMETHODIMP DK2TransformFilter::NonDelegatingQueryInterface(REFIID riid, void *
 
 DK2TransformFilter::DK2TransformFilter(LPUNKNOWN pUnk, HRESULT *phr)
   : CTransformFilter(NAME("DK2 Transform Filter"), pUnk, CLSID_DK2TransformFilter)
-{
-  /* Initialize any private variables here. */
-}
+{}
 
 HRESULT DK2TransformFilter::CheckInputType(const CMediaType *mtIn)
 {
@@ -21,28 +19,34 @@ HRESULT DK2TransformFilter::CheckInputType(const CMediaType *mtIn)
 
 HRESULT DK2TransformFilter::GetMediaType(int iPosition, CMediaType *pMediaType)
 {
-  HRESULT hr = m_pInput->ConnectionMediaType(pMediaType);
+  if (m_pInput->IsConnected() == FALSE) {
+    return E_UNEXPECTED;
+  }
 
-  if (FAILED(hr))
-    {
-      return hr;
-    }
+  if (iPosition > 0) {
+    return VFW_S_NO_MORE_ITEMS;
+  }
 
-  pMediaType->majortype = MEDIATYPE_Video;
-  pMediaType->subtype = MEDIASUBTYPE_RGB24;
+  pMediaType->SetType(&MEDIATYPE_Video);
+  pMediaType->SetSubtype(&MEDIASUBTYPE_RGB24);
   pMediaType->SetTemporalCompression(FALSE);
-
+  pMediaType->bFixedSizeSamples = true;
+  pMediaType->bTemporalCompression = false;
+  pMediaType->lSampleSize = 752 * 480 * 3;
+  pMediaType->SetFormatType(&FORMAT_VideoInfo);
   ASSERT(pMediaType->formattype == FORMAT_VideoInfo);
 
-  VIDEOINFOHEADER *pVih =
-    reinterpret_cast<VIDEOINFOHEADER*>(pMediaType->pbFormat);
+  VIDEOINFO *pVih = (VIDEOINFO *)pMediaType->AllocFormatBuffer(sizeof(VIDEOINFO));
+  ZeroMemory(pVih, sizeof(VIDEOINFO));
+
   pVih->bmiHeader.biCompression = BI_RGB;
   pVih->bmiHeader.biBitCount = 24;
   pVih->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
   pVih->bmiHeader.biWidth = 752;
   pVih->bmiHeader.biHeight = 480;
   pVih->bmiHeader.biPlanes = 1;
-  pVih->bmiHeader.biSizeImage = DIBSIZE(pVih->bmiHeader); 
+  pVih->bmiHeader.biSizeImage = DIBSIZE(pVih->bmiHeader);
+
   return S_OK;
 }
 
@@ -89,11 +93,6 @@ HRESULT DK2TransformFilter::DecideBufferSize(IMemAllocator *pAlloc, ALLOCATOR_PR
   return S_OK;
 }
 
-DWORD DK2TransformFilter::EncodeFrame(BYTE* pBufferIn, BYTE* pBufferOut)
-{
-  return 0;
-}
-
 HRESULT DK2TransformFilter::Transform(IMediaSample *pSource, IMediaSample *pDest)
 {
   // Get pointers to the underlying buffers.
@@ -109,10 +108,22 @@ HRESULT DK2TransformFilter::Transform(IMediaSample *pSource, IMediaSample *pDest
       return hr;
     }
   // Process the data.
-  DWORD cbDest = EncodeFrame(pBufferIn, pBufferOut);
-  ASSERT((long)cbDest <= pDest->GetSize());
+  long lSourceSize = pSource->GetActualDataLength();
 
-  pDest->SetActualDataLength(cbDest);
+#ifdef DEBUG
+  long lDestSize = pDest->GetSize();
+  ASSERT(lDestSize >= lSourceSize);
+#endif
+
+  for (int i = 0; i < lSourceSize; i++) {
+    CopyMemory((PVOID)(pBufferOut + (i * 3)), (PVOID)(pBufferIn + i), 1);
+    CopyMemory((PVOID)(pBufferOut + (i * 3) + 1), (PVOID)(pBufferIn + i), 1);
+    CopyMemory((PVOID)(pBufferOut + (i * 3) + 2), (PVOID)(pBufferIn + i), 1);
+  }
+  
+  ASSERT((752 * 480 * 3) <= pDest->GetSize());
+
+  pDest->SetActualDataLength(752 * 480 * 3);
   pDest->SetSyncPoint(TRUE);
   return S_OK;
 }
@@ -164,7 +175,7 @@ const AMOVIESETUP_PIN sudpPins[] =
     }
   };
 
-const AMOVIESETUP_FILTER sudEZrgb24 =
+const AMOVIESETUP_FILTER sudDK2 =
   {
     &CLSID_DK2TransformFilter,
     L"DK2 Transform Filter",
@@ -180,7 +191,7 @@ CFactoryTemplate g_Templates[] =
       &CLSID_DK2TransformFilter,
       DK2TransformFilter::CreateInstance,
       NULL,
-      &sudEZrgb24
+      &sudDK2
     }
   };
 
