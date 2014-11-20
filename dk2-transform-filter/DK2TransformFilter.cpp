@@ -2,6 +2,7 @@
 #include <initguid.h>
 #include <streams.h>
 #include "DK2TransformFilter.h"
+#include "bayer.h"
 
 STDMETHODIMP DK2TransformFilter::NonDelegatingQueryInterface(REFIID riid, void **ppv)
 {
@@ -115,11 +116,8 @@ HRESULT DK2TransformFilter::Transform(IMediaSample *pSource, IMediaSample *pDest
   ASSERT(lDestSize >= lSourceSize);
 #endif
 
-  for (int i = 0; i < lSourceSize; i++) {
-    CopyMemory((PVOID)(pBufferOut + (i * 3)), (PVOID)(pBufferIn + i), 1);
-    CopyMemory((PVOID)(pBufferOut + (i * 3) + 1), (PVOID)(pBufferIn + i), 1);
-    CopyMemory((PVOID)(pBufferOut + (i * 3) + 2), (PVOID)(pBufferIn + i), 1);
-  }
+  dc1394_bayer_Bilinear(pBufferIn, pBufferOut, 752, 480, DC1394_COLOR_FILTER_RGGB);
+
   
   ASSERT((752 * 480 * 3) <= pDest->GetSize());
 

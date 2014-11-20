@@ -70,9 +70,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="bayer.cpp" />
     <ClCompile Include="DK2TransformFilter.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="bayer.h" />
     <ClInclude Include="DK2TransformFilter.h" />
   </ItemGroup>
   <ItemGroup>
